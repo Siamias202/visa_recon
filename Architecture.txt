@@ -1,0 +1,26 @@
+Your architecture should separate responsibilities like this:
+
+Controller: Receives the files and delegates to the service.
+Service:
+Validate every file.
+Check whether the CSV matches the UploadRequest DTO (via ClassMap/headers).
+If any file is invalid, stop and return the error.
+If all files are valid, read all records.
+Merge all records into a single List<UploadRequest>.
+Return the merged list for further processing (save to DB, etc.).
+
+Client
+   │
+   │ Upload 5 CSV files
+   ▼
+ValidateAndMergeAsync()
+   │
+   ├── File1 ✔
+   ├── File2 ✔
+   ├── File3 ✔
+   ├── File4 ✔
+   ├── File5 ✔
+   ▼
+Merged List<UploadRequest> (all records)
+   ▼
+Save to database
