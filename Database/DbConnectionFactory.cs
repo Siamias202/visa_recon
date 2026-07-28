@@ -1,5 +1,7 @@
-﻿using Npgsql;
-using System.Data;
+﻿using System.Data;
+using Microsoft.Data.SqlClient;
+using Npgsql;
+using Oracle.ManagedDataAccess.Client;
 using VISA_RECON.API.Application.Interfaces;
 
 namespace VISA_RECON.API.Database
@@ -15,9 +17,22 @@ namespace VISA_RECON.API.Database
 
         public IDbConnection CreateConnection()
         {
-            return new NpgsqlConnection(
-                _configuration.GetConnectionString("Default")
-            );
+            var provider = _configuration["DatabaseProvider"];
+
+            return provider?.ToLower() switch
+            {
+                "postgres" => new NpgsqlConnection(
+                    _configuration.GetConnectionString("Postgre")),
+
+                "sqlserver" => new SqlConnection(
+                    _configuration.GetConnectionString("SqlServer")),
+
+                "oracle" => new OracleConnection(
+                    _configuration.GetConnectionString("Oracle")),
+
+                _ => throw new NotSupportedException(
+                    $"Database provider '{provider}' is not supported.")
+            };
         }
     }
 }

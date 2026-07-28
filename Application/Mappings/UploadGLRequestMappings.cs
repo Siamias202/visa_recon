@@ -3,9 +3,9 @@ using VISA_RECON.API.Application.DTOs.GLTransaction;
 
 namespace VISA_RECON.API.Application.Mappings
 {
-    public sealed class UploadRequestMappings : ClassMap<UploadRequest>
+    public sealed class UploadGLRequestMappings : ClassMap<UploadGLRequest>
     {
-        public UploadRequestMappings()
+        public UploadGLRequestMappings()
         {
             Map(m => m.AccountNo).Name("ACCOUNT NO");
             Map(m => m.PostingDate).Name("POSTING DATE");

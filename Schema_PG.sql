@@ -3,7 +3,7 @@
 
 
 
-CREATE TABLE visa_transaction
+CREATE TABLE bo_transaction
 (
     session_id VARCHAR(100),
     bo_oper_id VARCHAR(100),

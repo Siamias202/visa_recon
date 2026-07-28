@@ -1,46 +1,29 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <Compile Include="..\..\onboarding\Application\Common\ApiResponse.cs" Link="Application\Common\ApiResponse.cs" />
-    <Compile Include="..\..\onboarding\Application\Common\FileData.cs" Link="Application\Common\FileData.cs" />
-    <Compile Include="..\..\onboarding\Application\Common\PagedResponse.cs" Link="Application\Common\PagedResponse.cs" />
-    <Compile Include="..\..\onboarding\Application\Common\RequestContext.cs" Link="Application\Common\RequestContext.cs" />
-    <Compile Include="..\..\onboarding\Application\Common\Result.cs" Link="Application\Common\Result.cs" />
-    <Compile Include="..\..\onboarding\Application\Common\Unit.cs" Link="Application\Common\Unit.cs" />
-    <Compile Include="..\..\onboarding\Application\Interfaces\IDbConnectionFactory.cs" Link="Application\Interfaces\IDbConnectionFactory.cs" />
-    <Compile Include="..\..\onboarding\Application\Interfaces\IRequestContext.cs" Link="Application\Interfaces\IRequestContext.cs" />
-    <Compile Include="..\..\onboarding\Domain\Entities\AuditEntity.cs" Link="Domain\AuditEntity.cs" />
-    <Compile Include="..\..\onboarding\Domain\Entities\PagedResult.cs" Link="Domain\PagedResult.cs" />
-  </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="CsvHelper" Version="33.1.0" />
-    <PackageReference Include="Dapper" Version="2.1.79" />
-    <PackageReference Include="Npgsql" Version="10.0.3" />
-    <PackageReference Include="Serilog.Settings.Configuration" Version="10.0.1" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
-  </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="CsvHelper" Version="33.1.0" />
+		<PackageReference Include="Dapper" Version="2.1.79" />
+		<PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.2" />
+		<PackageReference Include="Npgsql" Version="10.0.3" />
+		<PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.26.300" />
+		<PackageReference Include="Serilog.Settings.Configuration" Version="10.0.1" />
+		<PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Application\Attributes\" />
-    <Folder Include="Application\Common\" />
-    <Folder Include="Application\Constants\" />
-    <Folder Include="Application\DTOs\" />
-    <Folder Include="Application\Exceptions\" />
-    <Folder Include="Application\Helper\" />
-    <Folder Include="Application\Interfaces\" />
-    <Folder Include="Application\Mappings\" />
-    <Folder Include="Application\Middleware\" />
-    <Folder Include="Application\Validators\" />
-    <Folder Include="Application\Services\" />
-    <Folder Include="Domain\" />
-    <Folder Include="Database\" />
-  </ItemGroup>
+	<ItemGroup>
+		<Folder Include="Application\Attributes\" />
+		<Folder Include="Application\Common\" />
+		<Folder Include="Application\Exceptions\" />
+		<Folder Include="Application\Helper\" />
+		<Folder Include="Domain\" />
+		<Folder Include="Database\" />
+	</ItemGroup>
 
 </Project>

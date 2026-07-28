@@ -5,17 +5,16 @@ namespace VISA_RECON.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class GLController : ControllerBase
+    public class BOController : ControllerBase
     {
-        private readonly IGLTransactionService _glTransactionService;
+        private readonly IBOTransactionService _boTransactionService;
 
-        public GLController(
-            IGLTransactionService glTransactionService)
+        public BOController(IBOTransactionService boTransactionService)
         {
-            _glTransactionService = glTransactionService;
+            _boTransactionService = boTransactionService;
         }
 
-        [Tags("GL Data")]
+        [Tags("Back Office")]
         [HttpPost("upload")]
         [RequestSizeLimit(500 * 1024 * 1024)]
         [RequestFormLimits(MultipartBodyLengthLimit = 500 * 1024 * 1024)]
@@ -26,19 +25,14 @@ namespace VISA_RECON.API.Controllers
             {
                 return BadRequest(new
                 {
-                    Code = "GL001",
+                    Code = "GL1001",
                     Message = "No CSV files uploaded."
                 });
             }
 
+            var response = await _boTransactionService.ValidateAndMergeAsync(files);
 
-            var response =
-                await _glTransactionService.ValidateAndMergeAsync(files);
-
-
-            return response.IsSuccess
-                                        ? Ok(response)
-                                        : BadRequest(response);
+            return response.IsSuccess ? Ok(response) : BadRequest(response);
         }
     }
 }

@@ -1,14 +1,14 @@
-﻿using CsvHelper;
-using System.Globalization;
+﻿using System.Globalization;
+using CsvHelper;
 using VISA_RECON.API.Application.Common;
 using VISA_RECON.API.Application.DTOs.GLTransaction;
 using VISA_RECON.API.Application.Interfaces.Repositories;
 using VISA_RECON.API.Application.Interfaces.Services;
 using VISA_RECON.API.Application.Mappings;
+using static VISA_RECON.API.Application.Constants.Constants;
 
 public class GLTransactionService : IGLTransactionService
 {
-
     private readonly IGLTransactionRepository _repository;
 
     public GLTransactionService(
@@ -17,49 +17,104 @@ public class GLTransactionService : IGLTransactionService
         _repository = repository;
     }
 
-    public async Task<bool> ValidateAndMergeAsync(List<IFormFile> files)
+
+    public async Task<Result<Unit>> ValidateAndMergeAsync(List<IFormFile> files)
     {
-        var mergedRecords = new List<UploadRequest>();
-
-        foreach (var file in files)
+        if (files == null || files.Count == 0)
         {
-            using var stream = file.OpenReadStream();
-            using var reader = new StreamReader(stream);
-            using var csv = new CsvReader(reader, CultureInfo.InvariantCulture);
-
-            csv.Read();
-            csv.ReadHeader();
-
-            var headers = csv.HeaderRecord;
-
-            if (!IsValidGLTransaction(headers))
-            {
-                return false;
-            }
-
-            stream.Position = 0;
-
-            using var reader2 = new StreamReader(stream);
-            using var csv2 = new CsvReader(reader2, CultureInfo.InvariantCulture);
-
-            csv2.Context.RegisterClassMap<UploadRequestMappings>();
-
-            var records = csv2.GetRecords<UploadRequest>().ToList();
-
-            mergedRecords.AddRange(records);
+            return Result<Unit>.Failure(
+                "GL001",
+                "No files were uploaded.");
         }
+
+
+        var mergedRecords = new List<UploadGLRequest>();
 
         try
         {
+            foreach (var file in files)
+            {
+                if (file.Length == 0)
+                {
+                    return Result<Unit>.Failure(
+                        "GL002",
+                        $"File '{file.FileName}' is empty.");
+                }
+
+
+                using var stream = file.OpenReadStream();
+                using var reader = new StreamReader(stream);
+
+                using var csv = new CsvReader(
+                    reader,
+                    CultureInfo.InvariantCulture);
+
+
+                if (!csv.Read())
+                {
+                    return Result<Unit>.Failure(
+                        "GL003",
+                        $"File '{file.FileName}' has no data.");
+                }
+
+
+                csv.ReadHeader();
+
+                var headers = csv.HeaderRecord;
+
+
+                if (!IsValidGLTransaction(headers))
+                {
+                    return Result<Unit>.Failure(
+                        "GL004",
+                        $"Invalid header format in file '{file.FileName}'.");
+                }
+
+
+                // Reset stream for actual reading
+                stream.Position = 0;
+
+
+                using var reader2 = new StreamReader(stream);
+
+                using var csv2 = new CsvReader(
+                    reader2,
+                    CultureInfo.InvariantCulture);
+
+
+                csv2.Context.RegisterClassMap<UploadGLRequestMappings>();
+
+
+                foreach (var record in csv2.GetRecords<UploadGLRequest>())
+                {
+                    mergedRecords.Add(record);
+                }
+            }
+
+
+            if (mergedRecords.Count == 0)
+            {
+                return Result<Unit>.Failure(
+                    "GL005",
+                    "No transaction records found.");
+            }
+
+
             await _repository.InsertBulkAsync(mergedRecords);
 
-            return true;
+
+            return Result<Unit>.Success(
+                APIResponseCodes.SUCCESS_CODE,
+                $"{mergedRecords.Count} GL transaction records uploaded successfully.");
         }
-        catch
+        catch (Exception ex)
         {
-            return false;
+            return Result<Unit>.Failure(
+                APIResponseCodes.ERROR_CODE,
+                $"GL transaction upload failed: {ex.Message}");
         }
     }
+
 
     private static readonly HashSet<string> ExpectedHeaders = new()
     {
@@ -84,10 +139,18 @@ public class GLTransactionService : IGLTransactionService
         "NARRATIVE 4"
     };
 
+
     private static bool IsValidGLTransaction(string[] headers)
     {
-        return ExpectedHeaders.SetEquals(headers);
-    }
+        if (headers == null)
+            return false;
 
-    
+
+        var normalizedHeaders = headers
+            .Select(x => x.Trim().ToUpper())
+            .ToHashSet();
+
+
+        return ExpectedHeaders.SetEquals(normalizedHeaders);
+    }
 }

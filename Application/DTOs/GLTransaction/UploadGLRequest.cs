@@ -1,8 +1,6 @@
-﻿using System;
-
-namespace VISA_RECON.API.Application.DTOs.GLTransaction
+﻿namespace VISA_RECON.API.Application.DTOs.GLTransaction
 {
-    public class UploadRequest
+    public class UploadGLRequest
     {
         public string AccountNo { get; set; } = default!;
         public string PostingDate { get; set; } = default!;

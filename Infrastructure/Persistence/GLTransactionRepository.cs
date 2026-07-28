@@ -17,9 +17,10 @@ namespace VISA_RECON.API.Infrastructure.Repositories
         }
 
 
-        public async Task<int> InsertBulkAsync(List<UploadRequest> transactions)
+        public async Task<int> InsertBulkAsync(
+            IEnumerable<UploadGLRequest> transactions)
         {
-            if (transactions == null || transactions.Count == 0)
+            if (transactions == null)
                 return 0;
 
 
@@ -35,6 +36,9 @@ namespace VISA_RECON.API.Infrastructure.Repositories
 
             try
             {
+                int insertedCount = 0;
+
+
                 await using (var writer =
                     await connection.BeginBinaryImportAsync(@"
                         COPY gl_transaction
@@ -66,55 +70,40 @@ namespace VISA_RECON.API.Infrastructure.Repositories
                     {
                         await writer.StartRowAsync();
 
-                        await Write(writer, item.AccountNo, NpgsqlDbType.Varchar);
 
-                        await Write(writer, item.PostingDate, NpgsqlDbType.Varchar);
+                        await Write(writer, item.AccountNo);
+                        await Write(writer, item.PostingDate);
+                        await Write(writer, item.ValueDate);
+                        await Write(writer, item.BatchId);
+                        await Write(writer, item.PostingBranch);
+                        await Write(writer, item.UniqueReferenceNo);
+                        await Write(writer, item.DebitCredit);
+                        await Write(writer, item.Amount);
+                        await Write(writer, item.TransactionCode);
+                        await Write(writer, item.TransactionName);
+                        await Write(writer, item.Currency);
+                        await Write(writer, item.TimeStamp);
+                        await Write(writer, item.UniqueId);
+                        await Write(writer, item.Narrative1);
+                        await Write(writer, item.Narrative2);
+                        await Write(writer, item.Narrative3);
+                        await Write(writer, item.Narrative4);
+                        await Write(writer, item.RRN);
+                        await Write(writer, item.AuthCode);
 
-                        await Write(writer, item.ValueDate, NpgsqlDbType.Varchar);
 
-                        await Write(writer, item.BatchId, NpgsqlDbType.Varchar);
-
-                        await Write(writer, item.PostingBranch, NpgsqlDbType.Varchar);
-
-                        await Write(writer, item.UniqueReferenceNo, NpgsqlDbType.Varchar);
-
-                        await Write(writer, item.DebitCredit, NpgsqlDbType.Varchar);
-
-                        await Write(writer, item.Amount, NpgsqlDbType.Varchar);
-
-                        await Write(writer, item.TransactionCode, NpgsqlDbType.Varchar);
-
-                        await Write(writer, item.TransactionName, NpgsqlDbType.Varchar);
-
-                        await Write(writer, item.Currency, NpgsqlDbType.Varchar);
-
-                        await Write(writer, item.TimeStamp, NpgsqlDbType.Varchar);
-
-                        await Write(writer, item.UniqueId, NpgsqlDbType.Varchar);
-
-                        await Write(writer, item.Narrative1, NpgsqlDbType.Varchar);
-
-                        await Write(writer, item.Narrative2, NpgsqlDbType.Varchar);
-
-                        await Write(writer, item.Narrative3, NpgsqlDbType.Varchar);
-
-                        await Write(writer, item.Narrative4, NpgsqlDbType.Varchar);
-
-                        await Write(writer, item.RRN, NpgsqlDbType.Varchar);
-
-                        await Write(writer, item.AuthCode, NpgsqlDbType.Varchar);
+                        insertedCount++;
                     }
 
-                    // Important: complete COPY before leaving using block
+
                     await writer.CompleteAsync();
                 }
 
 
-                // COPY is finished and connection is free now
                 await transaction.CommitAsync();
 
 
-                return transactions.Count;
+                return insertedCount;
             }
             catch (Exception ex)
             {
@@ -124,7 +113,6 @@ namespace VISA_RECON.API.Infrastructure.Repositories
                 }
                 catch
                 {
-                    // rollback failure should not hide original exception
                 }
 
 
@@ -137,8 +125,7 @@ namespace VISA_RECON.API.Infrastructure.Repositories
 
         private static async Task Write(
             NpgsqlBinaryImporter writer,
-            object? value,
-            NpgsqlDbType type)
+            string? value)
         {
             if (value == null)
             {
@@ -146,7 +133,10 @@ namespace VISA_RECON.API.Infrastructure.Repositories
                 return;
             }
 
-            await writer.WriteAsync(value, type);
+
+            await writer.WriteAsync(
+                value,
+                NpgsqlDbType.Varchar);
         }
     }
 }

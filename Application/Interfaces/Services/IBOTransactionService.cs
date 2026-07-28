@@ -2,9 +2,8 @@
 
 namespace VISA_RECON.API.Application.Interfaces.Services
 {
-    public interface IGLTransactionService
+    public interface IBOTransactionService
     {
         Task<Result<Unit>> ValidateAndMergeAsync(List<IFormFile> files);
-
     }
 }
