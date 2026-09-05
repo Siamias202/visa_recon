@@ -74,6 +74,24 @@ public sealed class MatchingService : IMatchingService
         }
     }
 
+    public async Task<Result<PagedResponse<ReconciliationStoredResultResponse>>>
+        GetDailyMatchesAsync(DailyMatchesRequest request)
+    {
+        try
+        {
+            var response = await _repository.GetDailyMatchesAsync(request);
+            return Result<PagedResponse<ReconciliationStoredResultResponse>>.Success(
+                APIResponseCodes.SUCCESS_CODE,
+                "Daily issuing matches retrieved successfully.", response);
+        }
+        catch (Exception ex)
+        {
+            return Result<PagedResponse<ReconciliationStoredResultResponse>>.Failure(
+                APIResponseCodes.ERROR_CODE,
+                $"Failed to retrieve daily issuing matches: {ex.Message}");
+        }
+    }
+
     public async Task<Result<PagedResponse<IssuingReversalResponse>>> GetReversalsAsync(
         IssuingReversalRequest request)
     {

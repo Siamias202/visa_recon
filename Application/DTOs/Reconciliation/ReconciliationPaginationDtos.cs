@@ -36,6 +36,14 @@ public sealed class ReconciliationStoredResultResponse
 
     public string? AgeBucket { get; set; }
 
+    public string? ReconciliationCurrency { get; set; }
+
+    public string? TransactionCategory { get; set; }
+
+    public string? MatchRule { get; set; }
+
+    public DateTime? MatchedAt { get; set; }
+
     public JsonElement? CbsData { get; set; }
 
     public JsonElement? BoData { get; set; }
@@ -77,6 +85,16 @@ public sealed class AgeBucketSummaryResponse
     public string AgeBucket { get; set; } = string.Empty;
 
     public int ItemCount { get; set; }
+}
+
+public sealed class DailyMatchesRequest
+{
+    // Null uses today's date in the application's reporting timezone.
+    public DateTime? ReconciliationDate { get; set; }
+
+    public int Page { get; set; } = 1;
+
+    public int PageSize { get; set; } = 20;
 }
 
 public sealed class IssuingReversalRequest

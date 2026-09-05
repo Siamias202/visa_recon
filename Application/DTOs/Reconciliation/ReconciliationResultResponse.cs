@@ -15,6 +15,12 @@ public sealed class ReconciliationResultResponse
 
     public int MatchedCount { get; set; }
 
+    public int PrimaryMatchCount { get; set; }
+
+    public int SecondaryMatchCount { get; set; }
+
+    public int ManualMatchCount { get; set; }
+
     public int MissingInCbsCount { get; set; }
 
     public int MissingInBoCount { get; set; }

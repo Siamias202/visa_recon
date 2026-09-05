@@ -10,6 +10,9 @@ public interface IMatchingRepository
     Task<PagedResponse<ReconciliationStoredResultResponse>>
         GetResultsAsync(ReconciliationResultsRequest request);
 
+    Task<PagedResponse<ReconciliationStoredResultResponse>>
+        GetDailyMatchesAsync(DailyMatchesRequest request);
+
     Task<MonthlyUnresolvedResponse> GetMonthlyUnresolvedAsync(
         MonthlyUnresolvedRequest request);
 

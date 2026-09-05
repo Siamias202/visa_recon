@@ -81,6 +81,18 @@ public class MainController : ControllerBase
     }
 
     [Tags("MatchController")]
+    [HttpPost("GetDailyMatches")]
+    public async Task<IActionResult> GetDailyMatches(
+        [FromBody] DailyMatchesRequest request)
+    {
+        var result = await _matchingService.GetDailyMatchesAsync(request);
+        var response = new ApiResponse<
+            PagedResponse<ReconciliationStoredResultResponse>>(
+            result.Code, result.Message, result.Value);
+        return result.IsSuccess ? Ok(response) : BadRequest(response);
+    }
+
+    [Tags("MatchController")]
     [HttpPost("GetReversals")]
     public async Task<IActionResult> GetReversals(
         [FromBody] IssuingReversalRequest request)

@@ -2,7 +2,6 @@
 {
     public sealed class GLTransactionDetailsResponse
     {
-        [System.Text.Json.Serialization.JsonIgnore]
         public long Id { get; set; }
 
         [System.Text.Json.Serialization.JsonIgnore]
@@ -45,6 +44,20 @@
         public string RRN { get; set; } = string.Empty;
 
         public string AuthCode { get; set; } = string.Empty;
+
+        public long? UploadBatchId { get; set; }
+
+        public DateTime? UploadedAt { get; set; }
+
+        public string ReconciliationCurrency { get; set; } = string.Empty;
+
+        public string TransactionCategory { get; set; } = string.Empty;
+
+        public string ReconciliationStatus { get; set; } = string.Empty;
+
+        public DateTime? MatchedAt { get; set; }
+
+        public string? MatchRule { get; set; }
     }
 
 }

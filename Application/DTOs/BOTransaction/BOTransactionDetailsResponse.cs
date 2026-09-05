@@ -2,7 +2,6 @@
 
 public class BOTransactionDetailsResponse
 {
-    [System.Text.Json.Serialization.JsonIgnore]
     public long Id { get; set; }
 
     [System.Text.Json.Serialization.JsonIgnore]
@@ -86,4 +85,18 @@ public class BOTransactionDetailsResponse
     public string? TRACE_TO_CBS { get; set; }
     public string? RRN { get; set; }
     public string? AUTH { get; set; }
+
+    public long? UploadBatchId { get; set; }
+
+    public DateTime? UploadedAt { get; set; }
+
+    public string ReconciliationCurrency { get; set; } = string.Empty;
+
+    public string TransactionCategory { get; set; } = string.Empty;
+
+    public string ReconciliationStatus { get; set; } = string.Empty;
+
+    public DateTime? MatchedAt { get; set; }
+
+    public string? MatchRule { get; set; }
 }

@@ -27,6 +27,7 @@ namespace VISA_RECON.API.Infrastructure.Persistence
         // DO NOT make this 50,000 because 50,000 x 54 parameters
         // creates a very large SQL command.
         private const int SqlBatchSize = 1_000;
+        private const int CommandTimeoutSeconds = 300;
 
         public BOTransactionRepository(
             IDbConnectionFactory connectionFactory)
@@ -44,35 +45,66 @@ namespace VISA_RECON.API.Infrastructure.Persistence
             if (transactions == null)
                 return 0;
 
+            var items = transactions
+                .Where(item => item is not null)
+                .ToList();
+
+            if (items.Count == 0)
+                return 0;
+
+            await using var connection =
+                (MySqlConnection)_connectionFactory.CreateConnection();
+            await connection.OpenAsync();
+
+            var uploadBatchId = await connection.ExecuteScalarAsync<long>(
+                """
+                INSERT INTO issuing_upload_batch
+                    (source_type, status, total_rows)
+                VALUES
+                    ('BO', 'PROCESSING', @TotalRows);
+                SELECT LAST_INSERT_ID();
+                """,
+                new { TotalRows = items.Count },
+                commandTimeout: CommandTimeoutSeconds);
+
             var totalInserted = 0;
 
-            var batch = new List<UploadBORequest>(
-                TransactionBatchSize);
-
-            foreach (var item in transactions)
+            try
             {
-                if (item == null)
-                    continue;
-
-                batch.Add(item);
-
-                if (batch.Count >= TransactionBatchSize)
+                for (var start = 0;
+                     start < items.Count;
+                     start += TransactionBatchSize)
                 {
-                    totalInserted +=
-                        await InsertBatchAsync(batch);
-
-                    batch.Clear();
+                    totalInserted += await InsertBatchAsync(
+                        items.Skip(start).Take(TransactionBatchSize).ToList(),
+                        uploadBatchId);
                 }
-            }
 
-            // Insert remaining records.
-            if (batch.Count > 0)
+                await connection.ExecuteAsync(
+                    """
+                    UPDATE issuing_upload_batch
+                    SET status = 'COMPLETED', completed_at = @CompletedAt,
+                        accepted_rows = @AcceptedRows
+                    WHERE id = @UploadBatchId;
+                    """,
+                    new
+                    {
+                        UploadBatchId = uploadBatchId,
+                        CompletedAt = DateTime.UtcNow,
+                        AcceptedRows = totalInserted
+                    },
+                    commandTimeout: CommandTimeoutSeconds);
+
+                return totalInserted;
+            }
+            catch (Exception ex)
             {
-                totalInserted +=
-                    await InsertBatchAsync(batch);
+                await CleanupFailedUploadAsync(uploadBatchId, ex.Message);
+                throw new InvalidOperationException(
+                    $"BO upload batch {uploadBatchId} failed after " +
+                    $"{totalInserted} inserted rows. Error: {ex.Message}",
+                    ex);
             }
-
-            return totalInserted;
         }
 
         // ============================================================
@@ -80,7 +112,8 @@ namespace VISA_RECON.API.Infrastructure.Persistence
         // ============================================================
 
         private async Task<int> InsertBatchAsync(
-            List<UploadBORequest> transactions)
+            List<UploadBORequest> transactions,
+            long uploadBatchId)
         {
             if (transactions.Count == 0)
                 return 0;
@@ -121,13 +154,15 @@ namespace VISA_RECON.API.Infrastructure.Persistence
                         BuildParameters(
                             transactions,
                             start,
-                            count);
+                            count,
+                            uploadBatchId);
 
                     var affected =
                         await connection.ExecuteAsync(
                             sql,
                             parameters,
-                            transaction);
+                            transaction,
+                            CommandTimeoutSeconds);
 
                     insertedCount += affected;
                 }
@@ -189,7 +224,13 @@ namespace VISA_RECON.API.Infrastructure.Persistence
                 reversal_flag,
                 auth_message_type,
                 utrnno,
-                rrn
+                rrn,
+                upload_batch_id,
+                reconciliation_currency,
+                transaction_category,
+                reconciliation_status,
+                primary_match_key,
+                secondary_match_key
                 """;
 
             var sql =
@@ -210,7 +251,7 @@ namespace VISA_RECON.API.Infrastructure.Persistence
 
                 sql.Append("(");
 
-                for (var column = 0; column < 23; column++)
+                for (var column = 0; column < 29; column++)
                 {
                     if (column > 0)
                         sql.Append(", ");
@@ -234,7 +275,8 @@ namespace VISA_RECON.API.Infrastructure.Persistence
         private static DynamicParameters BuildParameters(
             List<UploadBORequest> transactions,
             int start,
-            int count)
+            int count,
+            long uploadBatchId)
         {
             var parameters =
                 new DynamicParameters();
@@ -242,6 +284,27 @@ namespace VISA_RECON.API.Infrastructure.Persistence
             for (var i = 0; i < count; i++)
             {
                 var item = transactions[start + i];
+                var amount = ParseDecimal(
+                    item.STTL_AMOUNT,
+                    nameof(item.STTL_AMOUNT));
+                var classification =
+                    IssuingTransactionClassification.ClassifyBo(
+                        item.TXN_CURRENCY,
+                        item.TRX_TYPE);
+                var primaryKey =
+                    IssuingTransactionClassification.CreatePrimaryKey(
+                        classification,
+                        item.UTRNNO,
+                        item.RRN,
+                        item.AUTH_CODE,
+                        amount);
+                var secondaryKey =
+                    IssuingTransactionClassification.CreateSecondaryKey(
+                        classification,
+                        item.UTRNNO,
+                        item.RRN,
+                        item.AUTH_CODE,
+                        amount);
 
                 var values = new object?[]
                 {
@@ -259,7 +322,7 @@ namespace VISA_RECON.API.Infrastructure.Persistence
                     NormalizeIdentifier(item.ARN),
                     ParseTimestamp(item.TRANS_DATE, nameof(item.TRANS_DATE)),
                     TrimValue(item.TXN_CURRENCY)?.ToUpperInvariant(),
-                    ParseDecimal(item.STTL_AMOUNT, nameof(item.STTL_AMOUNT)),
+                    amount,
                     ParseShort(item.ST_REV, nameof(item.ST_REV)),
                     TrimValue(item.MERCHANT_NAME),
                     TrimValue(item.MERCHANT_COUNTRY),
@@ -267,7 +330,13 @@ namespace VISA_RECON.API.Infrastructure.Persistence
                     ParseShort(item.REVERSAL_FLAG, nameof(item.REVERSAL_FLAG)),
                     TrimValue(item.AUTH_MESSAGE_TYPE),
                     TrimValue(item.UTRNNO),
-                    TrimValue(item.RRN)
+                    TrimValue(item.RRN),
+                    uploadBatchId,
+                    classification.Currency,
+                    classification.Category,
+                    "PENDING",
+                    primaryKey,
+                    secondaryKey
                 };
 
                 for (var column = 0; column < values.Length; column++)
@@ -279,6 +348,45 @@ namespace VISA_RECON.API.Infrastructure.Persistence
             }
 
             return parameters;
+        }
+
+        private async Task CleanupFailedUploadAsync(long uploadBatchId, string error)
+        {
+            try
+            {
+                await using var connection =
+                    (MySqlConnection)_connectionFactory.CreateConnection();
+                await connection.OpenAsync();
+                await using var transaction = await connection.BeginTransactionAsync();
+
+                await connection.ExecuteAsync(
+                    "DELETE FROM issuing_bo_transaction WHERE upload_batch_id = @UploadBatchId;",
+                    new { UploadBatchId = uploadBatchId },
+                    transaction,
+                    CommandTimeoutSeconds);
+                await connection.ExecuteAsync(
+                    """
+                    UPDATE issuing_upload_batch
+                    SET status = 'FAILED', completed_at = @CompletedAt,
+                        accepted_rows = 0, rejected_rows = total_rows,
+                        error_message = @ErrorMessage
+                    WHERE id = @UploadBatchId;
+                    """,
+                    new
+                    {
+                        UploadBatchId = uploadBatchId,
+                        CompletedAt = DateTime.UtcNow,
+                        ErrorMessage = error.Length <= 4000 ? error : error[..4000]
+                    },
+                    transaction,
+                    CommandTimeoutSeconds);
+
+                await transaction.CommitAsync();
+            }
+            catch
+            {
+                // Preserve the original upload exception.
+            }
         }
 
         // ============================================================
@@ -546,6 +654,7 @@ namespace VISA_RECON.API.Infrastructure.Persistence
 
             const string sql = """
                 SELECT
+                    id AS Id,
                     session_id AS SESSION_ID,
                     bo_oper_id AS BO_OPER_ID,
                     ep_sttl_date AS EP_STTL_DATE,
@@ -572,7 +681,14 @@ namespace VISA_RECON.API.Infrastructure.Persistence
                     TRIM(auth_message_type)
                         AS AUTH_MESSAGE_TYPE,
                     TRIM(utrnno) AS UTRNNO,
-                    TRIM(rrn) AS RRN
+                    TRIM(rrn) AS RRN,
+                    upload_batch_id AS UploadBatchId,
+                    uploaded_at AS UploadedAt,
+                    reconciliation_currency AS ReconciliationCurrency,
+                    transaction_category AS TransactionCategory,
+                    reconciliation_status AS ReconciliationStatus,
+                    matched_at AS MatchedAt,
+                    match_rule AS MatchRule
 
                 FROM issuing_bo_transaction
 

@@ -26,12 +26,14 @@ public sealed class TestDataResetRepository : ITestDataResetRepository
             "ISSUING",
             IssuingLockName,
             [
-                "issuing_reconciliation_issue",
+                "issuing_reconciliation_run_result",
                 "issuing_reversal_transaction",
-                "issuing_reconciliation_result",
+                "issuing_reconciliation_match",
+                "issuing_manual_match_request",
                 "issuing_reconciliation_run",
                 "issuing_bo_transaction",
-                "issuing_cbs_transactions"
+                "issuing_cbs_transactions",
+                "issuing_upload_batch"
             ]);
 
     public Task<TestDataResetResponse> DeleteAcquiringDataAsync() =>

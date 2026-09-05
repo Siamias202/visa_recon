@@ -13,7 +13,9 @@ namespace VISA_RECON.API.Infrastructure.Repositories
     {
         private readonly IDbConnectionFactory _connectionFactory;
 
-        private const int BatchSize = 5_0000;
+        private const int TransactionBatchSize = 50_000;
+        private const int SqlBatchSize = 1_000;
+        private const int CommandTimeoutSeconds = 300;
 
         public GLTransactionRepository(
             IDbConnectionFactory connectionFactory)
@@ -47,192 +49,221 @@ namespace VISA_RECON.API.Infrastructure.Repositories
 
             await connection.OpenAsync();
 
+            var uploadBatchId = await connection.ExecuteScalarAsync<long>(
+                """
+                INSERT INTO issuing_upload_batch
+                    (source_type, status, total_rows)
+                VALUES
+                    ('CBS', 'PROCESSING', @TotalRows);
+                SELECT LAST_INSERT_ID();
+                """,
+                new { TotalRows = items.Count },
+                commandTimeout: CommandTimeoutSeconds);
+
             var totalInserted = 0;
 
-            for (var batchStart = 0;
-                 batchStart < items.Count;
-                 batchStart += BatchSize)
+            try
             {
-                var batch = items
-                    .Skip(batchStart)
-                    .Take(BatchSize)
-                    .ToList();
-
-                if (batch.Count == 0)
-                    continue;
-
-                await using var transaction =
-                    await connection.BeginTransactionAsync();
-
-                try
+                for (var transactionStart = 0;
+                     transactionStart < items.Count;
+                     transactionStart += TransactionBatchSize)
                 {
-                    var sql = new StringBuilder();
+                    var transactionItems = items
+                        .Skip(transactionStart)
+                        .Take(TransactionBatchSize)
+                        .ToList();
 
-                    sql.Append(@"
-                        INSERT INTO issuing_cbs_transactions
-                        (
-                            account_no,
-                            posting_date,
-                            value_date,
-                            batch_id,
-                            posting_branch,
-                            unique_reference_no,
-                            debit_credit,
-                            amount,
-                            transaction_code,
-                            transaction_name,
-                            currency,
-                            time_stamp,
-                            unique_id,
-                            narrative_1,
-                            narrative_2,
-                            narrative_3,
-                            narrative_4,
-                            rrn,
-                            auth_code
-                        )
-                        VALUES ");
+                    await using var transaction =
+                        await connection.BeginTransactionAsync();
 
-                    var parameters = new DynamicParameters();
-
-                    for (var i = 0; i < batch.Count; i++)
-                    {
-                        var item = batch[i];
-
-                        if (i > 0)
-                            sql.Append(",");
-
-                        sql.Append($@"
-                            (
-                                @AccountNo{i},
-                                @PostingDate{i},
-                                @ValueDate{i},
-                                @BatchId{i},
-                                @PostingBranch{i},
-                                @UniqueReferenceNo{i},
-                                @DebitCredit{i},
-                                @Amount{i},
-                                @TransactionCode{i},
-                                @TransactionName{i},
-                                @Currency{i},
-                                @TimeStamp{i},
-                                @UniqueId{i},
-                                @Narrative1{i},
-                                @Narrative2{i},
-                                @Narrative3{i},
-                                @Narrative4{i},
-                                @RRN{i},
-                                @AuthCode{i}
-                            )");
-
-                        parameters.Add(
-                            $"AccountNo{i}",
-                            TrimValue(item.AccountNo));
-
-                        parameters.Add(
-                            $"PostingDate{i}",
-                            item.PostingDate);
-
-                        parameters.Add(
-                            $"ValueDate{i}",
-                            item.ValueDate);
-
-                        parameters.Add(
-                            $"BatchId{i}",
-                            TrimValue(item.BatchId));
-
-                        parameters.Add(
-                            $"PostingBranch{i}",
-                            TrimValue(item.PostingBranch));
-
-                        parameters.Add(
-                            $"UniqueReferenceNo{i}",
-                            TrimValue(item.UniqueReferenceNo));
-
-                        parameters.Add(
-                            $"DebitCredit{i}",
-                            TrimValue(item.DebitCredit));
-
-                        parameters.Add(
-                            $"Amount{i}",
-                            item.Amount);
-
-                        parameters.Add(
-                            $"TransactionCode{i}",
-                            TrimValue(item.TransactionCode));
-
-                        parameters.Add(
-                            $"TransactionName{i}",
-                            TrimValue(item.TransactionName));
-
-                        parameters.Add(
-                            $"Currency{i}",
-                            TrimValue(item.Currency));
-
-                        parameters.Add(
-                            $"TimeStamp{i}",
-                            item.TimeStamp);
-
-                        parameters.Add(
-                            $"UniqueId{i}",
-                            TrimValue(item.UniqueId));
-
-                        parameters.Add(
-                            $"Narrative1{i}",
-                            TrimValue(item.Narrative1));
-
-                        parameters.Add(
-                            $"Narrative2{i}",
-                            TrimValue(item.Narrative2));
-
-                        parameters.Add(
-                            $"Narrative3{i}",
-                            TrimValue(item.Narrative3));
-
-                        parameters.Add(
-                            $"Narrative4{i}",
-                            TrimValue(item.Narrative4));
-
-                        parameters.Add(
-                            $"RRN{i}",
-                            TrimValue(item.RRN));
-
-                        parameters.Add(
-                            $"AuthCode{i}",
-                            TrimValue(item.AuthCode));
-                    }
-
-                    var inserted = await connection.ExecuteAsync(
-                        sql.ToString(),
-                        parameters,
-                        transaction);
-
-                    await transaction.CommitAsync();
-
-                    totalInserted += inserted;
-                }
-                catch (Exception ex)
-                {
                     try
                     {
-                        await transaction.RollbackAsync();
+                        for (var sqlStart = 0;
+                             sqlStart < transactionItems.Count;
+                             sqlStart += SqlBatchSize)
+                        {
+                            var batch = transactionItems
+                                .Skip(sqlStart)
+                                .Take(SqlBatchSize)
+                                .ToList();
+                            var sql = new StringBuilder("""
+                                INSERT INTO issuing_cbs_transactions
+                                (
+                                    upload_batch_id,
+                                    account_no,
+                                    posting_date,
+                                    value_date,
+                                    batch_id,
+                                    posting_branch,
+                                    unique_reference_no,
+                                    debit_credit,
+                                    amount,
+                                    transaction_code,
+                                    transaction_name,
+                                    currency,
+                                    time_stamp,
+                                    unique_id,
+                                    narrative_1,
+                                    narrative_2,
+                                    narrative_3,
+                                    narrative_4,
+                                    rrn,
+                                    auth_code,
+                                    reconciliation_currency,
+                                    transaction_category,
+                                    reconciliation_status,
+                                    primary_match_key,
+                                    secondary_match_key
+                                )
+                                VALUES
+                                """);
+                            var parameters = new DynamicParameters();
+
+                            for (var i = 0; i < batch.Count; i++)
+                            {
+                                if (i > 0)
+                                    sql.Append(',');
+
+                                var item = batch[i];
+                                var classification =
+                                    IssuingTransactionClassification.ClassifyCbs(
+                                        item.AccountNo);
+                                var primaryKey =
+                                    IssuingTransactionClassification.CreatePrimaryKey(
+                                        classification,
+                                        item.UniqueReferenceNo,
+                                        item.RRN,
+                                        item.AuthCode,
+                                        item.Amount);
+                                var secondaryKey =
+                                    IssuingTransactionClassification.CreateSecondaryKey(
+                                        classification,
+                                        item.UniqueReferenceNo,
+                                        item.RRN,
+                                        item.AuthCode,
+                                        item.Amount);
+
+                                sql.Append($"""
+                                    (
+                                        @UploadBatchId{i}, @AccountNo{i},
+                                        @PostingDate{i}, @ValueDate{i}, @BatchId{i},
+                                        @PostingBranch{i}, @UniqueReferenceNo{i},
+                                        @DebitCredit{i}, @Amount{i},
+                                        @TransactionCode{i}, @TransactionName{i},
+                                        @Currency{i}, @TimeStamp{i}, @UniqueId{i},
+                                        @Narrative1{i}, @Narrative2{i},
+                                        @Narrative3{i}, @Narrative4{i}, @Rrn{i},
+                                        @AuthCode{i}, @ReconCurrency{i}, @Category{i},
+                                        'PENDING', @PrimaryKey{i}, @SecondaryKey{i}
+                                    )
+                                    """);
+
+                                parameters.Add($"UploadBatchId{i}", uploadBatchId);
+                                parameters.Add($"AccountNo{i}", TrimValue(item.AccountNo));
+                                parameters.Add($"PostingDate{i}", item.PostingDate);
+                                parameters.Add($"ValueDate{i}", item.ValueDate);
+                                parameters.Add($"BatchId{i}", TrimValue(item.BatchId));
+                                parameters.Add($"PostingBranch{i}", TrimValue(item.PostingBranch));
+                                parameters.Add($"UniqueReferenceNo{i}", TrimValue(item.UniqueReferenceNo));
+                                parameters.Add($"DebitCredit{i}", TrimValue(item.DebitCredit));
+                                parameters.Add($"Amount{i}", item.Amount);
+                                parameters.Add($"TransactionCode{i}", TrimValue(item.TransactionCode));
+                                parameters.Add($"TransactionName{i}", TrimValue(item.TransactionName));
+                                parameters.Add($"Currency{i}", TrimValue(item.Currency));
+                                parameters.Add($"TimeStamp{i}", item.TimeStamp);
+                                parameters.Add($"UniqueId{i}", TrimValue(item.UniqueId));
+                                parameters.Add($"Narrative1{i}", TrimValue(item.Narrative1));
+                                parameters.Add($"Narrative2{i}", TrimValue(item.Narrative2));
+                                parameters.Add($"Narrative3{i}", TrimValue(item.Narrative3));
+                                parameters.Add($"Narrative4{i}", TrimValue(item.Narrative4));
+                                parameters.Add($"Rrn{i}", TrimValue(item.RRN));
+                                parameters.Add($"AuthCode{i}", TrimValue(item.AuthCode));
+                                parameters.Add($"ReconCurrency{i}", classification.Currency);
+                                parameters.Add($"Category{i}", classification.Category);
+                                parameters.Add($"PrimaryKey{i}", primaryKey);
+                                parameters.Add($"SecondaryKey{i}", secondaryKey);
+                            }
+
+                            totalInserted += await connection.ExecuteAsync(
+                                sql.ToString(),
+                                parameters,
+                                transaction,
+                                CommandTimeoutSeconds);
+                        }
+
+                        await transaction.CommitAsync();
                     }
                     catch
                     {
-                        // Preserve original exception.
+                        try { await transaction.RollbackAsync(); } catch { }
+                        throw;
                     }
-
-                    throw new Exception(
-                        $"GL transaction batch failed. " +
-                        $"Batch starting at record {batchStart + 1}, " +
-                        $"batch size {batch.Count}. " +
-                        $"Total successfully inserted before failure: " +
-                        $"{totalInserted}. Error: {ex.Message}",
-                        ex);
                 }
-            }
 
-            return totalInserted;
+                await connection.ExecuteAsync(
+                    """
+                    UPDATE issuing_upload_batch
+                    SET status = 'COMPLETED', completed_at = @CompletedAt,
+                        accepted_rows = @AcceptedRows
+                    WHERE id = @UploadBatchId;
+                    """,
+                    new
+                    {
+                        UploadBatchId = uploadBatchId,
+                        CompletedAt = DateTime.UtcNow,
+                        AcceptedRows = totalInserted
+                    },
+                    commandTimeout: CommandTimeoutSeconds);
+
+                return totalInserted;
+            }
+            catch (Exception ex)
+            {
+                await CleanupFailedUploadAsync(uploadBatchId, ex.Message);
+                throw new InvalidOperationException(
+                    $"GL upload batch {uploadBatchId} failed after " +
+                    $"{totalInserted} inserted rows. Error: {ex.Message}",
+                    ex);
+            }
+        }
+
+        private async Task CleanupFailedUploadAsync(long uploadBatchId, string error)
+        {
+            try
+            {
+                await using var connection =
+                    (MySqlConnection)_connectionFactory.CreateConnection();
+                await connection.OpenAsync();
+                await using var transaction = await connection.BeginTransactionAsync();
+
+                await connection.ExecuteAsync(
+                    "DELETE FROM issuing_cbs_transactions WHERE upload_batch_id = @UploadBatchId;",
+                    new { UploadBatchId = uploadBatchId },
+                    transaction,
+                    CommandTimeoutSeconds);
+                await connection.ExecuteAsync(
+                    """
+                    UPDATE issuing_upload_batch
+                    SET status = 'FAILED', completed_at = @CompletedAt,
+                        accepted_rows = 0, rejected_rows = total_rows,
+                        error_message = @ErrorMessage
+                    WHERE id = @UploadBatchId;
+                    """,
+                    new
+                    {
+                        UploadBatchId = uploadBatchId,
+                        CompletedAt = DateTime.UtcNow,
+                        ErrorMessage = error.Length <= 4000 ? error : error[..4000]
+                    },
+                    transaction,
+                    CommandTimeoutSeconds);
+
+                await transaction.CommitAsync();
+            }
+            catch
+            {
+                // Preserve the original upload exception.
+            }
         }
 
         private static string? TrimValue(string? value)
@@ -264,6 +295,7 @@ namespace VISA_RECON.API.Infrastructure.Repositories
 
             const string sql = @"
                 SELECT
+                    id AS Id,
                     account_no AS AccountNo,
                     DATE(posting_date) AS PostingDate,
                     DATE(value_date) AS ValueDate,
@@ -283,7 +315,14 @@ namespace VISA_RECON.API.Infrastructure.Repositories
                     TRIM(narrative_3) AS Narrative3,
                     TRIM(narrative_4) AS Narrative4,
                     TRIM(rrn) AS RRN,
-                    TRIM(auth_code) AS AuthCode
+                    TRIM(auth_code) AS AuthCode,
+                    upload_batch_id AS UploadBatchId,
+                    uploaded_at AS UploadedAt,
+                    reconciliation_currency AS ReconciliationCurrency,
+                    transaction_category AS TransactionCategory,
+                    reconciliation_status AS ReconciliationStatus,
+                    matched_at AS MatchedAt,
+                    match_rule AS MatchRule
                 FROM issuing_cbs_transactions
                 WHERE
                     (

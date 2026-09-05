@@ -86,6 +86,15 @@ namespace VISA_RECON.API.Application.Services
                         "No transaction records found.");
                 }
 
+                mergedRecords.RemoveAll(IssuingUploadCleaning.ShouldRemove);
+
+                if (mergedRecords.Count == 0)
+                {
+                    return Result<Unit>.Failure(
+                        "BO005",
+                        "No eligible BO transaction records found.");
+                }
+
                 var inserted = await _repository.InsertBulkAsync(
                     mergedRecords);
 
