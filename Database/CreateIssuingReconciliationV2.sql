@@ -180,7 +180,10 @@ CREATE TABLE IF NOT EXISTS issuing_cbs_transactions
     narrative_3                  VARCHAR(100),
     narrative_4                  VARCHAR(100),
     rrn                          VARCHAR(100),
-    auth_code                    VARCHAR(100),
+    -- Some source files contain extended authorization references. The match
+    -- index uses the fixed-width SHA-256 key, so preserving the full value here
+    -- does not make the candidate index larger.
+    auth_code                    VARCHAR(500),
 
     uploaded_at                  DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     reconciliation_currency     CHAR(3) NOT NULL,
@@ -268,7 +271,7 @@ CREATE TABLE IF NOT EXISTS issuing_bo_transaction
     card_number                  VARCHAR(100),
     account_number               VARCHAR(100),
     sender_account_number        VARCHAR(100),
-    auth_code                    VARCHAR(100),
+    auth_code                    VARCHAR(500),
     arn                          VARCHAR(100),
     trans_date                   VARCHAR(100),
     txn_currency                 VARCHAR(10),

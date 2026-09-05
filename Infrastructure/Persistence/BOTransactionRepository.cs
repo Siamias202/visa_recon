@@ -52,6 +52,8 @@ namespace VISA_RECON.API.Infrastructure.Persistence
             if (items.Count == 0)
                 return 0;
 
+            ValidateUploadLengths(items);
+
             await using var connection =
                 (MySqlConnection)_connectionFactory.CreateConnection();
             await connection.OpenAsync();
@@ -348,6 +350,21 @@ namespace VISA_RECON.API.Infrastructure.Persistence
             }
 
             return parameters;
+        }
+
+        private static void ValidateUploadLengths(
+            IReadOnlyList<UploadBORequest> items)
+        {
+            for (var index = 0; index < items.Count; index++)
+            {
+                var authCode = items[index].AUTH_CODE?.Trim();
+                if (authCode?.Length > 500)
+                {
+                    throw new InvalidDataException(
+                        $"BO source row {index + 2} has AUTH_CODE length " +
+                        $"{authCode.Length}; the maximum supported length is 500.");
+                }
+            }
         }
 
         private async Task CleanupFailedUploadAsync(long uploadBatchId, string error)

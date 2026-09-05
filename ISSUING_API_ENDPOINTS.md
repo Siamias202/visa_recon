@@ -148,3 +148,6 @@ Search body:
 
 The application currently classifies the five known GL accounts in code, so
 `issuing_gl_account_mapping` is not required by these endpoints.
+
+For a database that was created before authorization codes were widened, run
+`Database/Migrations/20260905_WidenIssuingAuthCode.sql` once before uploading.

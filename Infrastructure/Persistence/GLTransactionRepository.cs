@@ -44,6 +44,8 @@ namespace VISA_RECON.API.Infrastructure.Repositories
             if (items.Count == 0)
                 return 0;
 
+            ValidateUploadLengths(items);
+
             await using var connection =
                 (MySqlConnection)_connectionFactory.CreateConnection();
 
@@ -271,6 +273,21 @@ namespace VISA_RECON.API.Infrastructure.Repositories
             return string.IsNullOrWhiteSpace(value)
                 ? null
                 : value.Trim();
+        }
+
+        private static void ValidateUploadLengths(
+            IReadOnlyList<UploadGLRequest> items)
+        {
+            for (var index = 0; index < items.Count; index++)
+            {
+                var authCode = items[index].AuthCode?.Trim();
+                if (authCode?.Length > 500)
+                {
+                    throw new InvalidDataException(
+                        $"GL source row {index + 2} has AUTH CODE length " +
+                        $"{authCode.Length}; the maximum supported length is 500.");
+                }
+            }
         }
 
         public async Task<PagedResponse<GLTransactionDetailsResponse>>
