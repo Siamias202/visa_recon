@@ -17,7 +17,8 @@ public static class IssuingUploadCleaning
         {
             "Purchase return (Credit)",
             "Payment Transaction",
-            "P2P Credit"
+            "P2P Credit",
+            "P2P Debit"
         };
 
     public static bool ShouldRemove(UploadGLRequest row) =>
@@ -36,10 +37,16 @@ public static class IssuingUploadCleaning
                 StringComparison.OrdinalIgnoreCase))
             return true;
 
-        return !string.Equals(
-                   transactionType,
-                   "ATM Cash withdrawal",
-                   StringComparison.OrdinalIgnoreCase)
+        // Only ATM, POS/Purchase and PreAuth belong to issuing
+        // reconciliation. Other BO products (including future P2P variants)
+        // are skipped during parsing and again before database insertion.
+        if (!IssuingTransactionClassification.TryClassifyBo(
+                row.TXN_CURRENCY,
+                transactionType,
+                out var classification))
+            return true;
+
+        return classification.Category != "ATM"
                && IsOne(row.ST_REV);
     }
 
@@ -51,4 +58,3 @@ public static class IssuingUploadCleaning
             out var parsed)
         && parsed == 1m;
 }
-
