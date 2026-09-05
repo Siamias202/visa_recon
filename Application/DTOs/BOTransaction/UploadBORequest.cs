@@ -56,9 +56,6 @@
         public string TRACE_TO_CBS { get; set; } = string.Empty;
         public string RRN { get; set; } = string.Empty;
         public string AUTH { get; set; } = string.Empty;
-        public string FE { get; set; } = string.Empty;
-        public string VROL { get; set; } = string.Empty;
-        public string Status { get; set; } = string.Empty;
-        public string update { get; set; } = string.Empty;
+       
     }
 }

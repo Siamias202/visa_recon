@@ -1,8 +1,8 @@
-﻿namespace Ekyc.Onboarding.API.Application.Common
+﻿namespace VISA_RECON.API.Application.Common
 {
     public class PagedResponse<T>
     {
-        public IEnumerable<T> Items { get; set; }
+        public IEnumerable<T> Items { get; set; } = [];
         public int Page { get; set; }
         public int PageSize { get; set; }
         public int TotalItems { get; set; }

@@ -6,3 +6,9 @@ obj/
 # Common node modules locations
 /node_modules
 /wwwroot/node_modules
+
+# Local build verification and IDE/user-specific files
+.build/
+*.user
+*.tmp
+Properties/PublishProfiles/

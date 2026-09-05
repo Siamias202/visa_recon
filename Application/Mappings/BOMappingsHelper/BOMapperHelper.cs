@@ -1,11 +1,11 @@
 ﻿using CsvHelper.Configuration;
 using VISA_RECON.API.Application.DTOs.BOTransaction;
 
-namespace VISA_RECON.API.Application.Mappings
+namespace VISA_RECON.API.Application.Mappings.BOMappingsHelper
 {
-    public class UploadBORequestMappings : ClassMap<UploadBORequest>
+    public class UploadBORequestHelper : ClassMap<UploadBORequest>
     {
-        public UploadBORequestMappings()
+        public UploadBORequestHelper()
         {
             Map(m => m.SESSION_ID).Name("SESSION_ID");
             Map(m => m.BO_OPER_ID).Name("BO_OPER_ID");
@@ -61,10 +61,7 @@ namespace VISA_RECON.API.Application.Mappings
             Map(m => m.TRACE_TO_CBS).Name("TRACE_TO_CBS");
             Map(m => m.RRN).Name("RRN");
             Map(m => m.AUTH).Name("AUTH");
-            Map(m => m.FE).Name("FE");
-            Map(m => m.VROL).Name("VROL");
-            Map(m => m.Status).Name("Status");
-            Map(m => m.update).Name("update");
+          
         }
     }
 }

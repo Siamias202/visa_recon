@@ -1,5 +1,10 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+using VISA_RECON.API.Application.Common;
+using VISA_RECON.API.Application.DTOs.BOTransaction;
+using VISA_RECON.API.Application.DTOs.GLTransaction;
 using VISA_RECON.API.Application.Interfaces.Services;
+using static VISA_RECON.API.Application.Constants.Constants;
 
 namespace VISA_RECON.API.Controllers
 {
@@ -15,7 +20,7 @@ namespace VISA_RECON.API.Controllers
         }
 
         [Tags("Back Office")]
-        [HttpPost("upload")]
+        [HttpPost("uploadBOFiles")]
         [RequestSizeLimit(500 * 1024 * 1024)]
         [RequestFormLimits(MultipartBodyLengthLimit = 500 * 1024 * 1024)]
         [Consumes("multipart/form-data")]
@@ -23,16 +28,48 @@ namespace VISA_RECON.API.Controllers
         {
             if (files == null || files.Count == 0)
             {
-                return BadRequest(new
-                {
-                    Code = "GL1001",
-                    Message = "No CSV files uploaded."
-                });
+                return BadRequest(new { Message = "No files were uploaded." });
             }
 
             var response = await _boTransactionService.ValidateAndMergeAsync(files);
 
-            return response.IsSuccess ? Ok(response) : BadRequest(response);
+            if (!response.IsSuccess)
+            {
+                return StatusCode(StatusCodes.Status400BadRequest, new
+                {
+                    Message = response.Message
+                });
+            }
+
+            return StatusCode(StatusCodes.Status200OK, new
+            {
+                Message = response.Message
+            });
         }
+
+        [Tags("Back Office")]
+        [HttpPost("GetBOTransactionsList")]
+
+        public async Task<IActionResult> GetBOTransactionsList([FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] BOTransactionRequest? request)
+        {
+            request ??= new BOTransactionRequest();
+
+            var result = await _boTransactionService.GetBOTransactionsListAsync(request);
+            if (!result.IsSuccess)
+            {
+                return StatusCode(StatusCodes.Status400BadRequest, new
+                {
+                    Message = result.Message
+                });
+            }
+            return StatusCode(
+                StatusCodes.Status200OK,
+                new ApiResponse<PagedResponse<BOTransactionDetailsResponse>>(
+                    result.Code,
+                    result.Message,
+                    result.Value));
+        }
+
+
     }
 }

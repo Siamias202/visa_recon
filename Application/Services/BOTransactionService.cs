@@ -1,10 +1,12 @@
-﻿using System.Globalization;
-using CsvHelper;
+﻿using CsvHelper;
+using System.Globalization;
 using VISA_RECON.API.Application.Common;
 using VISA_RECON.API.Application.DTOs.BOTransaction;
+using VISA_RECON.API.Application.Helper;
 using VISA_RECON.API.Application.Interfaces.Repository;
 using VISA_RECON.API.Application.Interfaces.Services;
-using VISA_RECON.API.Application.Mappings;
+using VISA_RECON.API.Application.Mappings.BOMappingsHelper;
+using VISA_RECON.API.Infrastructure.Persistence;
 using static VISA_RECON.API.Application.Constants.Constants;
 
 namespace VISA_RECON.API.Application.Services
@@ -18,7 +20,8 @@ namespace VISA_RECON.API.Application.Services
             _repository = repository;
         }
 
-        public async Task<Result<Unit>> ValidateAndMergeAsync(List<IFormFile> files)
+        public async Task<Result<Unit>> ValidateAndMergeAsync(
+                                                                 List<IFormFile> files)
         {
             if (files == null || files.Count == 0)
             {
@@ -33,6 +36,11 @@ namespace VISA_RECON.API.Application.Services
             {
                 foreach (var file in files)
                 {
+                    if (file == null)
+                    {
+                        continue;
+                    }
+
                     if (file.Length == 0)
                     {
                         return Result<Unit>.Failure(
@@ -40,40 +48,34 @@ namespace VISA_RECON.API.Application.Services
                             $"File '{file.FileName}' is empty.");
                     }
 
-                    using var stream = file.OpenReadStream();
-                    using var reader = new StreamReader(stream);
+                    var extension = Path
+                        .GetExtension(file.FileName)
+                        .ToLowerInvariant();
 
-                    using var csv = new CsvReader(reader, CultureInfo.InvariantCulture);
-
-                    if (!csv.Read())
+                    switch (extension)
                     {
-                        return Result<Unit>.Failure(
-                            "BO003",
-                            $"File '{file.FileName}' has no data.");
-                    }
+                        case ".csv":
 
-                    csv.ReadHeader();
+                            await BOUploadHelper.ReadCsvFileAsync(
+                                file,
+                                mergedRecords);
 
-                    var headers = csv.HeaderRecord;
+                            break;
 
-                    if (!IsValidBOTransaction(headers))
-                    {
-                        return Result<Unit>.Failure(
-                            "BO004",
-                            $"Invalid header format in file '{file.FileName}'.");
-                    }
+                        case ".xlsx":
 
-                    // Reset stream
-                    stream.Position = 0;
+                            await BOUploadHelper.ReadXlsxFileAsync(
+                                file,
+                                mergedRecords);
 
-                    using var reader2 = new StreamReader(stream);
-                    using var csv2 = new CsvReader(reader2, CultureInfo.InvariantCulture);
+                            break;
 
-                    csv2.Context.RegisterClassMap<UploadBORequestMappings>();
+                        default:
 
-                    foreach (var record in csv2.GetRecords<UploadBORequest>())
-                    {
-                        mergedRecords.Add(record);
+                            return Result<Unit>.Failure(
+                                "BO006",
+                                $"Unsupported file format for '{file.FileName}'. " +
+                                "Only CSV and XLSX files are allowed.");
                     }
                 }
 
@@ -84,11 +86,18 @@ namespace VISA_RECON.API.Application.Services
                         "No transaction records found.");
                 }
 
-                await _repository.InsertBulkAsync(mergedRecords);
+                var inserted = await _repository.InsertBulkAsync(
+                    mergedRecords);
 
                 return Result<Unit>.Success(
                     APIResponseCodes.SUCCESS_CODE,
-                    $"{mergedRecords.Count} BO transaction records uploaded successfully.");
+                    $"{inserted} BO transaction records uploaded successfully.");
+            }
+            catch (InvalidDataException ex)
+            {
+                return Result<Unit>.Failure(
+                    "BO004",
+                    ex.Message);
             }
             catch (Exception ex)
             {
@@ -98,67 +107,67 @@ namespace VISA_RECON.API.Application.Services
             }
         }
 
-        private static readonly HashSet<string> ExpectedHeaders = new()
-        {
-            "SESSION_ID",
-            "BO_OPER_ID",
-            "EP_STTL_DATE",
-            "RUN_DATE",
-            "TRX_TYPE",
-            "MESSAGE_TYPE",
-            "CLR_STATUS",
-            "CONTRACT_TYPE",
-            "CARD_NUMBER",
-            "ACCOUNT_NUMBER",
-            "SENDER_ACCOUNT_NUMBER",
-            "AUTH_CODE",
-            "ARN",
-            "TRANS_DATE",
-            "CLR_TXN_AMOUNT",
-            "TXN_CURRENCY",
-            "BILL_AMT",
-            "ACCT_CURR",
-            "STTL_AMOUNT",
-            "ST_REV",
-            "MATCH_STATUS",
-            "AUTH_ID",
-            "MCC",
-            "MERCHANT_NUMBER",
-            "TERMINAL_NUMBER",
-            "MERCHANT_NAME",
-            "MERCHANT_CITY",
-            "MERCHANT_COUNTRY",
-            "AUTH_OPR_ID",
-            "BASE_II_ID",
-            "TRANSACTION_DATE",
-            "AUTH_CARD_NUMBER",
-            "REVERSAL_FLAG",
-            "TXN_AMOUNT",
-            "AUTH_CURRENCY",
-            "BILLING_AMOUNT",
-            "FEES",
-            "BILLING_CURRENCY",
-            "STATUS",
-            "TXN_TYPE",
-            "AUTH_MESSAGE_TYPE",
-            "AUTH_MCC",
-            "AUTH_MID",
-            "AUTH_MERCHANT_NAME",
-            "AUTH_CITY",
-            "AUTH_COUNTRY",
-            "AUTH_TID",
-            "AUTH_ACCT_UMBER",
-            "POS_COND_CODE",
-            "UTRNNO",
-            "TRACE_NUMBER",
-            "TRACE_TO_CBS",
-            "RRN",
-            "AUTH",
-            "FE",
-            "VROL",
-            "Status",
-            "update"
-        };
+
+
+        private static readonly HashSet<string> ExpectedHeaders =
+                        new(StringComparer.OrdinalIgnoreCase)
+                        {
+                            "SESSION_ID",
+                            "BO_OPER_ID",
+                            "EP_STTL_DATE",
+                            "RUN_DATE",
+                            "TRX_TYPE",
+                            "MESSAGE_TYPE",
+                            "CLR_STATUS",
+                            "CONTRACT_TYPE",
+                            "CARD_NUMBER",
+                            "ACCOUNT_NUMBER",
+                            "SENDER_ACCOUNT_NUMBER",
+                            "AUTH_CODE",
+                            "ARN",
+                            "TRANS_DATE",
+                            "CLR_TXN_AMOUNT",
+                            "TXN_CURRENCY",
+                            "BILL_AMT",
+                            "ACCT_CURR",
+                            "STTL_AMOUNT",
+                            "ST_REV",
+                            "MATCH_STATUS",
+                            "AUTH_ID",
+                            "MCC",
+                            "MERCHANT_NUMBER",
+                            "TERMINAL_NUMBER",
+                            "MERCHANT_NAME",
+                            "MERCHANT_CITY",
+                            "MERCHANT_COUNTRY",
+                            "AUTH_OPR_ID",
+                            "BASE_II_ID",
+                            "TRANSACTION_DATE",
+                            "AUTH_CARD_NUMBER",
+                            "REVERSAL_FLAG",
+                            "TXN_AMOUNT",
+                            "AUTH_CURRENCY",
+                            "BILLING_AMOUNT",
+                            "FEES",
+                            "BILLING_CURRENCY",
+                            "STATUS",
+                            "TXN_TYPE",
+                            "AUTH_MESSAGE_TYPE",
+                            "AUTH_MCC",
+                            "AUTH_MID",
+                            "AUTH_MERCHANT_NAME",
+                            "AUTH_CITY",
+                            "AUTH_COUNTRY",
+                            "AUTH_TID",
+                            "AUTH_ACCT_UMBER",
+                            "POS_COND_CODE",
+                            "UTRNNO",
+                            "TRACE_NUMBER",
+                            "TRACE_TO_CBS",
+                            "RRN",
+                            "AUTH"
+                        };
+
 
         private static bool IsValidBOTransaction(string[] headers)
         {
@@ -170,6 +179,27 @@ namespace VISA_RECON.API.Application.Services
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             return ExpectedHeaders.SetEquals(normalizedHeaders);
+        }
+
+        public async Task<Result<PagedResponse<BOTransactionDetailsResponse>>> GetBOTransactionsListAsync(BOTransactionRequest request)
+        {
+            request ??= new BOTransactionRequest();
+
+            try
+            {
+                var pagedResponse = await _repository.GetBOTransactionDetailsListAsync(request);
+
+                return Result<PagedResponse<BOTransactionDetailsResponse>>.Success(
+                    APIResponseCodes.SUCCESS_CODE,
+                    "BO transaction details retrieved successfully.",
+                    pagedResponse);
+            }
+            catch (Exception ex)
+            {
+                return Result<PagedResponse<BOTransactionDetailsResponse>>.Failure(
+                    APIResponseCodes.ERROR_CODE,
+                    $"Failed to retrieve BO transactions. Error: {ex.Message}");
+            }
         }
     }
 }
