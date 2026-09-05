@@ -42,41 +42,20 @@ public static class IssuingTransactionClassification
         string? transactionCurrency,
         string? transactionType)
     {
-        if (TryClassifyBo(
-                transactionCurrency,
-                transactionType,
-                out var classification))
-        {
-            return classification;
-        }
-
-        throw new InvalidDataException(
-            $"BO transaction type '{transactionType}' is not supported " +
-            "for issuing reconciliation.");
-    }
-
-    public static bool TryClassifyBo(
-        string? transactionCurrency,
-        string? transactionType,
-        out IssuingClassification classification)
-    {
-        classification = null!;
-        var normalizedCurrency = NormalizeUpper(transactionCurrency);
-        var normalizedType = NormalizeUpper(transactionType);
-
-        if (normalizedCurrency is null || normalizedType is null)
-            return false;
+        var normalizedCurrency = NormalizeUpper(transactionCurrency)
+            ?? throw new InvalidDataException(
+                "BO transaction currency is required.");
+        var normalizedType = NormalizeUpper(transactionType)
+            ?? throw new InvalidDataException(
+                "BO transaction type is required.");
 
         var category = normalizedType switch
         {
             "ATM CASH WITHDRAWAL" => "ATM",
             "PURCHASE" or "POS" or "POS PURCHASE" or "POS/PURCHASE" => "POS",
             "PREAUTH" or "PRE-AUTH" or "PRE AUTH" => "PREAUTH",
-            _ => null
+            _ => "OTHER"
         };
-
-        if (category is null)
-            return false;
 
         // Per the issuing GL structure, BDT settles to BDT and every foreign
         // transaction currency settles through the USD reconciliation GL.
@@ -84,11 +63,9 @@ public static class IssuingTransactionClassification
             ? "BDT"
             : "USD";
 
-        classification = new IssuingClassification(
+        return new IssuingClassification(
             reconciliationCurrency,
             category);
-
-        return true;
     }
 
     public static byte[]? CreatePrimaryKey(

@@ -149,5 +149,11 @@ Search body:
 The application currently classifies the five known GL accounts in code, so
 `issuing_gl_account_mapping` is not required by these endpoints.
 
+BO cleaning removes `Purchase return (Credit)`, `Payment Transaction`, and
+`P2P Credit`. Other BO transaction types are retained. Types outside ATM,
+POS/Purchase, and PreAuth are stored with transaction category `OTHER`.
+
 For a database that was created before authorization codes were widened, run
 `Database/Migrations/20260905_WidenIssuingAuthCode.sql` once before uploading.
+Also run `Database/Migrations/20260905_AddIssuingBoOtherCategory.sql` on a V2
+database created before the `OTHER` category was introduced.

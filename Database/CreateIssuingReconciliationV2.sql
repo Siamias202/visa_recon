@@ -345,7 +345,7 @@ CREATE TABLE IF NOT EXISTS issuing_bo_transaction
     CONSTRAINT chk_issuing_bo_currency
         CHECK (reconciliation_currency IN ('BDT', 'USD')),
     CONSTRAINT chk_issuing_bo_category
-        CHECK (transaction_category IN ('ATM', 'POS', 'PREAUTH')),
+        CHECK (transaction_category IN ('ATM', 'POS', 'PREAUTH', 'OTHER')),
     CONSTRAINT chk_issuing_bo_match_rule
         CHECK (match_rule IS NULL OR match_rule IN
                ('PRIMARY', 'SECONDARY', 'MANUAL'))
@@ -553,7 +553,7 @@ CREATE TABLE IF NOT EXISTS issuing_reconciliation_run_result
     CONSTRAINT chk_issuing_run_result_currency
         CHECK (reconciliation_currency IN ('BDT', 'USD')),
     CONSTRAINT chk_issuing_run_result_category
-        CHECK (transaction_category IN ('ATM', 'POS', 'PREAUTH')),
+        CHECK (transaction_category IN ('ATM', 'POS', 'PREAUTH', 'OTHER')),
     CONSTRAINT chk_issuing_run_result_shape
         CHECK
         (
